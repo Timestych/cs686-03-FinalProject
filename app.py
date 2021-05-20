@@ -8,6 +8,9 @@ app = Flask(__name__)
 basedir = os.path.abspath(os.path.dirname(__file__))
 app.secret_key = "Secret Key"
 
+@app.route('/')
+def hello():
+    print('Welcome to our final Project')
 
 @app.route('/leagues', methods=['GET'])
 def get_leagues():
@@ -37,10 +40,6 @@ def get_players():
         players[player['player']['name']] = player['player']['photo']
     return render_template('index.html', value=players)
 
-
-@app.route('/test')
-def get_test():
-    return 'the test works'
 
 def get_headers():
     headers = {
