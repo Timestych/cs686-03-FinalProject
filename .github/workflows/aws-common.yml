@@ -1,0 +1,82 @@
+on:
+  push:
+    branches:
+      - main
+
+name: Deploy to Amazon ECS - Dev Env
+
+jobs:        
+  deploy:      
+    name: Deploy
+    runs-on: ubuntu-latest
+
+    steps:    
+    - name: Checkout
+      uses: actions/checkout@v2
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID_DEV }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY_ID_DEV }}
+        aws-region: us-west-2
+
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v1
+      
+    - name: Docker build and push
+      id: build-image
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        ECR_REPOSITORY: dev-tsehgal2
+        IMAGE_TAG: ${{ github.sha }}
+      run: |
+        echo ":: $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+        echo "::set-output name=image::$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+        
+    - name: Update task definition
+      id: task-def
+      uses: aws-actions/amazon-ecs-render-task-definition@v1
+      with:
+        task-definition: task-definition-dev.json
+        container-name: dev-tsehgal2
+        image: ${{ steps.build-image.outputs.image }}
+       
+    - name: Deploy Amazon ECS task definition
+      uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+      with:
+        task-definition: ${{ steps.task-def.outputs.task-definition }}
+        service: dev-tsehgal2
+        cluster: dev-tsehgal2
+        wait-for-service-stability: true
+
+
+    - name: Docker build and push to prod
+      id: build-image-prod
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        ECR_REPOSITORY: prod-tsehgal2
+        IMAGE_TAG: ${{ github.sha }}
+      run: |
+        echo ":: $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+        echo "::set-output name=image::$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+    - name: Update task definition prod
+      id: task-def-prod
+      uses: aws-actions/amazon-ecs-render-task-definition@v1
+      with:
+        task-definition: task-definition-prod.json
+        container-name: prod-tsehgal2
+        image: ${{ steps.build-image-prod.outputs.image }}
+
+    - name: Deploy Amazon ECS task definition prod
+      uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+      with:
+        task-definition: ${{ steps.task-def-prod.outputs.task-definition }}
+        service: prod-tsehgal2
+        cluster: prod-tsehgal2
+        wait-for-service-stability: true
